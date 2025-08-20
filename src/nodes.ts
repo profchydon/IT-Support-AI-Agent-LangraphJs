@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { ChatOpenAI } from "@langchain/openai";
 import { State, Update } from "./graph";
 import { z } from "zod";
@@ -13,25 +16,29 @@ export const processMessage = async (state: State): Promise<Update> => {
 
   const structuredllm = llm.withStructuredOutput(
     z.object({
-      type: z.enum(["Feedback", "Support", "Spam", "Other"])
-        .describe("The type of the message"),
+      type: z.enum(["Feedback", "Support", "Spam", "Other"]).describe("The type of the complaint"),
       reason: z.string().describe("The reason why you selected the type"),
     })
   );
 
-  const SYSTEM_PROMPT = `You are an expert email-analizer AI. 
-      You are given emails and you give them one of the avaliable labels.
-      You answer with a json of this structure: {
-        type: 'Support' | 'Feedback' | 'Spam' | 'Other',
+  const SYSTEM_PROMPT = 
+    `You are an expert email-analizer AI.  You are given emails and you give them one of the avaliable labels. 
+    You answer with a json of this structure: 
+    {
+        type: 'Feedback' | 'Support' | 'Spam' | 'Other',
         reason: string
-      }`;
+      }
+    You must be concise in your response and only return the type and reason.
+    `;
+
+  console.log("Processing message", state.message.message);
 
   const response = await structuredllm.invoke([
     [
       "system",
       SYSTEM_PROMPT,
     ],
-    ["human", state.message.message],
+    ["user", state.message.message],
   ]);
 
   console.log("Process Message Result", response);
@@ -62,14 +69,16 @@ export const processFeedback = async (state: State): Promise<Update> => {
       You answer with a json of this structure: {
         isPositive: boolean,
         reason: string
-      }`;
+      }
+      You must be concise in your response and only return the isPositive and reason.
+      `;
 
   const response = await structuredllm.invoke([
     [
       "system",
       SYSTEM_PROMPT,
     ],
-    ["human", state.message.message],
+    ["user", state.message.message],
   ]);
 
   console.log("Process Feedback Result", response);
@@ -82,48 +91,6 @@ export const processFeedback = async (state: State): Promise<Update> => {
     },
   };
 }
-
-export const processSupport = async (state: State): Promise<Update> => {
-  const userId = getUserFromEmail(state.message.sender);
-
-  const llm = new ChatOpenAI({
-    temperature: 0,
-    model: "gpt-4o-mini",
-  });
-
-  const structuredLlm = llm.withStructuredOutput(
-    z.object({
-      type: z
-        .enum(["Bug", "TechnicalQuestion"])
-        .describe("If the support request is a bug or technical question"),
-      reason: z.string().describe("The reason for your selection of the type"),
-    })
-  );
-
-  const SYSTEM_PROMPT = `You are an expert support request analizer AI. 
-      You are given a support request and you give them one of the avaliable labels.
-      You answer with a json of this structure: {
-        type: 'Bug' | 'TechnicalQuestion',
-        reason: string
-      }`;
-
-  const response = await structuredLlm.invoke([
-    [
-      "system",
-      SYSTEM_PROMPT,
-    ],
-    ["human", state.message.message],
-  ]);
-
-  console.log("Process Support Result", response);
-
-  return {
-    support: {
-      userId: userId,
-      supportType: response.type,
-    },
-  };
-};
 
 export const processSupport = async (state: State): Promise<Update> => {
   const userId = getUserFromEmail(state.message.sender);
